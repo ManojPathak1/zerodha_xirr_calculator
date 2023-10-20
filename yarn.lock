@@ -23,6 +23,11 @@ combined-stream@^1.0.8:
   dependencies:
     delayed-stream "~1.0.0"
 
+csv-writer@^1.6.0:
+  version "1.6.0"
+  resolved "https://chegg.jfrog.io/chegg/api/npm/npm/csv-writer/-/csv-writer-1.6.0.tgz#d0cea44b6b4d7d3baa2ecc6f3f7209233514bcf9"
+  integrity sha512-NOx7YDFWEsM/fTRAJjRpPp8t+MKRVvniAg9wQlUKx20MFrPs73WLJhFf5iteqrxNYnsy924K3Iroh3yNHeYd2g==
+
 delayed-stream@~1.0.0:
   version "1.0.0"
   resolved "https://chegg.jfrog.io/chegg/api/npm/npm/delayed-stream/-/delayed-stream-1.0.0.tgz#df3ae199acadfb7d440aaae0b29e2272b24ec619"

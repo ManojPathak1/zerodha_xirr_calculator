@@ -1,8 +1,13 @@
 const axios = require("axios");
 const xirr = require("xirr");
 const lodash = require("lodash");
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const credentials = require("./config");
-const { HOLDINGS_ENDPOINT, CSRF_TOKEN_HEADER, TradeType } = require("./constants");
+const {
+  HOLDINGS_ENDPOINT,
+  CSRF_TOKEN_HEADER,
+  TradeType,
+} = require("./constants");
 
 const fetchHoldings = async () => {
   const response = await axios.get(HOLDINGS_ENDPOINT, {
@@ -19,17 +24,21 @@ const getTradeURL = (year, page) =>
     year + 1
   }-03-31&page=${page}&sort_by=order_execution_time&sort_desc=false`;
 
-const getTradesFromAPI = async (year, page) => {
+const getTradesFromAPI = async (year, page, retry = 1) => {
   const response = await axios.get(getTradeURL(year, page), {
     headers: {
       Cookie: credentials.cookieTrades,
       [CSRF_TOKEN_HEADER]: credentials.csrfToken,
     },
   });
-  return response.data.data.result;
+  const isEmpty = response.data.data.result.length === 0;
+  if (retry === 3) return response.data.data.result;
+  return isEmpty
+    ? getTradesFromAPI(year, page, retry + 1)
+    : response.data.data.result;
 };
 
-const getAllTrades = async (year = 2021, page = 1) => {
+const getAllTrades = async (year = credentials.startYear, page = 1) => {
   const trades = await getTradesFromAPI(year, page);
 
   const isTradesEmpty = trades.length === 0;
@@ -50,12 +59,16 @@ const main = async () => {
     fetchHoldings(),
   ]);
 
-  console.log(`Total Trades,${allTrades.length}\n`);
+  const csvData = [];
+
+  csvData.push({ stock: "Total Trades", xirr: allTrades.length });
 
   const data = allTrades.map(
     ({ trade_type, quantity, price, trade_date, tradingsymbol }) => {
       return {
-        amount: (trade_type === TradeType.BUY ? -1 : 1) * (quantity * price).toFixed(2),
+        amount:
+          (trade_type === TradeType.BUY ? -1 : 1) *
+          (quantity * price).toFixed(2),
         when: new Date(trade_date),
         stock: tradingsymbol,
       };
@@ -75,14 +88,41 @@ const main = async () => {
   }, {});
 
   lodash.forEach(stocksToAmountMap, (stockAmount, stock) => {
-    groupedByStocks[stock].push({ amount: stockAmount, when: new Date() });
-    console.log(`${stock},${(xirr(groupedByStocks[stock]) * 100).toFixed(2)}%`);
+    if (groupedByStocks[stock]) {
+      groupedByStocks[stock].push({ amount: stockAmount, when: new Date() });
+      try {
+        const stockXIRR = (xirr(groupedByStocks[stock]) * 100).toFixed(2);
+        csvData.push({ stock, xirr: `${stockXIRR}%` });
+      } catch (err) {
+        csvData.push({ stock, xirr: 'NA' });
+      }
+    }
   });
 
   data.push({ amount: totalAmount, when: new Date() });
   const result = (xirr(data) * 100).toFixed(2);
 
-  console.log(`\nOverall XIRR,${result}%`);
+  csvData.push({ stock: "Overall XIRR", xirr: `${result}%` });
+
+  createCSV(csvData);
+};
+
+const createCSV = (data) => {
+  const csvWriter = createCsvWriter({
+    path: `${credentials.username}-report.csv`,
+    header: [
+      { id: 'stock', title: 'Stock Symbol' },
+      { id: 'xirr', title: 'XIRR' },
+    ],
+  });
+
+  csvWriter.writeRecords(data)
+  .then(() => {
+    console.log('CSV file has been written successfully');
+  })
+  .catch((error) => {
+    console.error('Error writing the CSV file:', error);
+  });
 };
 
 main();
