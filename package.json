@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "ind-stocks": "node index",
+    "us-stocks": "node us-stocks-xirr"
+  },
   "dependencies": {
     "axios": "^1.5.1",
     "csv-writer": "^1.6.0",
