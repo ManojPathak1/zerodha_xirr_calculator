@@ -39,12 +39,21 @@ const getHoldingsAndTrades = async () => {
       })
     );
     const trades = tradesResponse.map(
-      ({ stockId: stock, type, amount, sectionStart: { subtitle: date } }) => ({
-        stock,
-        type: type.toUpperCase(),
+      ({
+        stockId: stock,
+        type,
         amount,
-        date,
-      })
+        sectionStart: { subtitle: date },
+        quantity,
+      }) => {
+        return {
+          stock,
+          type: type.toUpperCase(),
+          amount,
+          date: new Date(date),
+          quantity: Math.floor(quantity * Math.pow(10, 9)),
+        };
+      }
     );
     return { holdings, trades };
   } catch (error) {

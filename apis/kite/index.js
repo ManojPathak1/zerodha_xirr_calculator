@@ -1,8 +1,10 @@
 const axios = require("axios");
+const lodash = require("lodash");
 const { CSRF_TOKEN_HEADER } = require("../../constants");
 const credentials = require("../../config");
 
-const HOLDINGS_ENDPOINT = "https://kite.zerodha.com/api/portfolio/holdings/kite";
+const HOLDINGS_ENDPOINT =
+  "https://kite.zerodha.com/api/portfolio/holdings/kite";
 
 const getTradeURL = (year, page) =>
   `https://console.zerodha.com/api/reports/tradebook?segment=EQ&from_date=${year}-01-01&to_date=${year}-12-31&page=${page}&sort_by=order_execution_time&sort_desc=false`;
@@ -26,7 +28,7 @@ const getTrades = async (year, page) => {
   });
   const { result, pagination } = response.data.data;
 
-  if (pagination === null) return getTrades(year, page);
+  if (lodash.isNull(pagination)) return getTrades(year, page);
 
   const { page: currentPage, total_pages } = pagination;
 
@@ -67,12 +69,21 @@ const getHoldingsAndTrades = async () => {
       })
     );
     const trades = tradesResponse.map(
-      ({ tradingsymbol: stock, trade_type: type, quantity, price, trade_date: date }) => ({
-        stock,
-        type: type.toUpperCase(),
-        amount: quantity * price,
-        date,
-      })
+      ({
+        tradingsymbol: stock,
+        trade_type: type,
+        quantity,
+        price,
+        trade_date: date,
+      }) => {
+        return {
+          stock,
+          type: type.toUpperCase(),
+          amount: quantity * price,
+          quantity,
+          date: new Date(date),
+        };
+      }
     );
     return { holdings, trades };
   } catch (error) {

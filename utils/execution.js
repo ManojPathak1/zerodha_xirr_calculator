@@ -3,20 +3,40 @@ const lodash = require("lodash");
 const createCsvWriter = require("csv-writer").createObjectCsvWriter;
 const credentials = require("../config");
 
+const findLastIndex = (array, condition) => {
+  let index = -1;
+  for (let i = 0; i < array.length; i++) if (condition(array[i])) index = i;
+  return index;
+}
+
 const execution = (holdings, trades, reportType) => {
   const totalNumberOfTrades = trades.length;
 
-  const xirrData = trades
+  trades.sort((a, b) => a.date - b.date);
+
+  const data = trades
     .filter(({ amount }) => !lodash.isUndefined(amount))
-    .map(({ type, amount, date, stock }) => {
+    .map(({ type, amount, date: when, stock, quantity }) => {
       return {
         amount: (type === "BUY" ? -1 : 1) * amount,
-        when: new Date(date),
+        when,
         stock,
+        type,
+        quantity,
       };
     });
 
-  const stocksGroupedXIRRData = lodash.groupBy(xirrData, "stock");
+  const stocksGroupedXIRRData = lodash.mapValues(
+    lodash.groupBy(data, "stock"),
+    (trades) => {
+      let netQuantity = 0;
+      const soldIndex = findLastIndex(trades, (trade) => {
+        netQuantity += (trade.type === "BUY" ? 1 : -1) * trade.quantity;
+        return netQuantity === 0;
+      });
+      return soldIndex === -1 ? trades : trades.splice(soldIndex + 1);
+    }
+  );
 
   const totalHoldingAmount = holdings.reduce((acc, stock) => {
     acc += stock.currentValue;
@@ -27,6 +47,16 @@ const execution = (holdings, trades, reportType) => {
     acc[stock.stock] = stock.currentValue;
     return acc;
   }, {});
+
+  const xirrData = lodash.reduce(
+    holdings,
+    (acc, holding) => {
+      if (stocksGroupedXIRRData[holding.stock])
+        acc.push(...stocksGroupedXIRRData[holding.stock]);
+      return acc;
+    },
+    []
+  );
 
   const stocksXIRR = lodash.reduce(
     stockToTotalAmountMap,

@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "ind-stocks": "node index",
+    "in-stocks": "node in-stocks-xirr",
     "us-stocks": "node us-stocks-xirr"
   },
   "dependencies": {
