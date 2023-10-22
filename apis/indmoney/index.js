@@ -2,7 +2,6 @@ const axios = require("axios");
 const credentials = require("../../config");
 
 const PAGE_LIMIT = 30;
-
 const HOLDINGS_ENDPOINT = `https://apixt-fz.indmoney.com/us-stocks-ext/api/v1/stocks/dw/user/account/holdings/?page=1&limit=${PAGE_LIMIT}`;
 const TRADES_ENDPOINT = `https://apixt-fz.indmoney.com/us-stocks-ext/api/v3/getTransactionsPageWidget/?identifier=CT&page=1&limit=1000`;
 
@@ -27,25 +26,33 @@ const getTrades = async () => {
 };
 
 const getHoldingsAndTrades = async () => {
-  const [holdingsResponse, tradesResponse] = await Promise.all([
-    getHoldings(),
-    getTrades(),
-  ]);
-  const holdings = holdingsResponse.map(
-    ({ ticker: stock, current_value: currentValue }) => ({
-      stock,
-      currentValue,
-    })
-  );
-  const trades = tradesResponse.map(
-    ({ stockId: stock, type, amount, sectionStart: { subtitle: date } }) => ({
-      stock,
-      type: type.toUpperCase(),
-      amount,
-      date,
-    })
-  );
-  return { holdings, trades };
+  console.log("Fetching...");
+  try {
+    const [holdingsResponse, tradesResponse] = await Promise.all([
+      getHoldings(),
+      getTrades(),
+    ]);
+    const holdings = holdingsResponse.map(
+      ({ ticker: stock, current_value: currentValue }) => ({
+        stock,
+        currentValue,
+      })
+    );
+    const trades = tradesResponse.map(
+      ({ stockId: stock, type, amount, sectionStart: { subtitle: date } }) => ({
+        stock,
+        type: type.toUpperCase(),
+        amount,
+        date,
+      })
+    );
+    return { holdings, trades };
+  } catch (error) {
+    if (error.response.status === 401) {
+      console.error(error.response.statusText);
+    }
+  }
+  return { holdings: [], trades: [] };
 };
 
 module.exports = { getHoldingsAndTrades };
