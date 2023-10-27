@@ -28,11 +28,14 @@ const getTrades = async (year, page) => {
   });
   const { result, pagination } = response.data.data;
 
-  if (lodash.isNull(pagination)) return getTrades(year, page);
+  if (lodash.isNull(pagination)) {
+    console.log(`Please wait...${Math.floor(Math.random() * 10)}`);
+    return getTrades(year, page);
+  }
 
   const { page: currentPage, total_pages } = pagination;
 
-  const isEmpty = response.data.data.result.length === 0;
+  const isEmpty = result.length === 0;
 
   console.log(`Fetching for ${year}...`);
 

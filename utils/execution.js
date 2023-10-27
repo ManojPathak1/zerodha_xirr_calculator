@@ -5,9 +5,11 @@ const credentials = require("../config");
 
 const findLastIndex = (array, condition) => {
   let index = -1;
-  for (let i = 0; i < array.length; i++) if (condition(array[i])) index = i;
+  array.forEach((el, i) => {
+    if (condition[el]) index = i;
+  });
   return index;
-}
+};
 
 const execution = (holdings, trades, reportType) => {
   const totalNumberOfTrades = trades.length;
@@ -96,9 +98,9 @@ const createCSV = ({
   reportType,
 }) => {
   const csvWriter = createCsvWriter({
-    path: `./outputs/${
+    path: `./outputs/${reportType}/${
       credentials.username
-    }-${getCurrentDate()}-${reportType}-report.csv`,
+    }-${getCurrentDate()}.csv`,
     header: [
       { id: "stock", title: "Stock Symbol" },
       { id: "xirr", title: "XIRR" },
