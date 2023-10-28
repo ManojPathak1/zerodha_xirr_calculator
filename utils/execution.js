@@ -3,13 +3,6 @@ const lodash = require("lodash");
 const createCsvWriter = require("csv-writer").createObjectCsvWriter;
 const credentials = require("../config");
 
-const findLastIndex = (array, condition) => {
-  let index = -1;
-  array.forEach((el, i) => {
-    if (condition[el]) index = i;
-  });
-  return index;
-};
 
 const execution = (holdings, trades, reportType) => {
   const totalNumberOfTrades = trades.length;
@@ -28,17 +21,38 @@ const execution = (holdings, trades, reportType) => {
       };
     });
 
-  const stocksGroupedXIRRData = lodash.mapValues(
-    lodash.groupBy(data, "stock"),
-    (trades) => {
-      let netQuantity = 0;
-      const soldIndex = findLastIndex(trades, (trade) => {
-        netQuantity += (trade.type === "BUY" ? 1 : -1) * trade.quantity;
-        return netQuantity === 0;
-      });
-      return soldIndex === -1 ? trades : trades.splice(soldIndex + 1);
+  let buyTrades = data.filter((trade) => trade.type === "BUY");
+  const soldTrades = data.filter((trade) => trade.type === "SELL");
+  const buySoldTrades = [];
+
+  soldTrades.forEach((soldTrade) => {
+    const indexToDelete = [];
+    let soldQuantity = soldTrade.quantity;
+    const soldStock = soldTrade.stock;
+    for (const [index, buyTrade] of buyTrades.entries()) {
+      const buyQuantity = buyTrade.quantity;
+      const buyStock = buyTrade.stock;
+      if (soldStock != buyStock) continue;
+      const net = buyQuantity - soldQuantity;
+      if (net <= 0) {
+        indexToDelete.push(index);
+        if (net === 0) break;
+        soldQuantity -= buyQuantity;
+      } else {
+        buyTrades[index].quantity = net;
+        break;
+      }
     }
-  );
+
+    const deletedTrades = buyTrades.filter((_, index) => indexToDelete.includes(index))
+    buySoldTrades.push(...deletedTrades);
+    buyTrades = buyTrades.filter((_, index) => !indexToDelete.includes(index));
+  });
+
+  soldTrades.push(...buySoldTrades);
+
+  const groupedByStock = lodash.groupBy(buyTrades, "stock");
+  const soldStocksGroupByStock = lodash.groupBy(soldTrades, "stock");
 
   const totalHoldingAmount = holdings.reduce((acc, stock) => {
     acc += stock.currentValue;
@@ -53,29 +67,29 @@ const execution = (holdings, trades, reportType) => {
   const xirrData = lodash.reduce(
     holdings,
     (acc, holding) => {
-      if (stocksGroupedXIRRData[holding.stock])
-        acc.push(...stocksGroupedXIRRData[holding.stock]);
+      if (groupedByStock[holding.stock])
+        acc.push(...groupedByStock[holding.stock]);
       return acc;
     },
     []
   );
 
+  const omitHoldingStocks = [];
+
   const stocksXIRR = lodash.reduce(
     stockToTotalAmountMap,
     (acc, totalAmount, stock) => {
-      if (stocksGroupedXIRRData[stock]) {
-        stocksGroupedXIRRData[stock].push({
+      if (groupedByStock[stock]) {
+        groupedByStock[stock].push({
           amount: totalAmount,
           when: new Date(),
         });
         try {
-          const stockXIRR = (xirr(stocksGroupedXIRRData[stock]) * 100).toFixed(
-            2
-          );
+          const stockXIRR = (xirr(groupedByStock[stock]) * 100).toFixed(2);
           acc.push({ stock, xirr: stockXIRR });
         } catch (err) {
-          console.error(err);
-          acc.push({ stock, xirr: "NA" });
+          omitHoldingStocks.push(stock);
+          console.error(`Holdings Stock - Failed to calculate XIRR for ${stock}`);
         }
       }
       return acc;
@@ -83,18 +97,49 @@ const execution = (holdings, trades, reportType) => {
     []
   );
 
+  const omitSoldStocks = [];
+
+  const soldStocksXIRR = lodash.reduce(
+    soldStocksGroupByStock,
+    (acc, trades, stock) => {
+      try {
+        const stockXIRR = (xirr(trades) * 100).toFixed(2);
+        acc.push({ stock, xirr: stockXIRR });
+      } catch (err) {
+        omitSoldStocks.push(stock);
+        console.error(`Sold Stocks - Failed to calculate XIRR for ${stock}`);
+      }
+      return acc;
+    },
+    []
+  );
+
   stocksXIRR.sort((a, b) => b.xirr - a.xirr);
+  soldStocksXIRR.sort((a, b) => b.xirr - a.xirr);
 
   xirrData.push({ amount: totalHoldingAmount, when: new Date() });
+  const overallSoldXIRR = (xirr(soldTrades) * 100).toFixed(2);
+
   const overallXIRR = (xirr(xirrData) * 100).toFixed(2);
 
-  createCSV({ totalNumberOfTrades, stocksXIRR, overallXIRR, reportType });
+  createCSV({
+    totalNumberOfTrades,
+    totalNumberOfHoldingsTrades: xirrData.length,
+    stocksXIRR,
+    overallXIRR,
+    soldStocksXIRR,
+    overallSoldXIRR,
+    reportType,
+  });
 };
 
 const createCSV = ({
   totalNumberOfTrades,
+  totalNumberOfHoldingsTrades,
   stocksXIRR,
   overallXIRR,
+  soldStocksXIRR,
+  overallSoldXIRR,
   reportType,
 }) => {
   const csvWriter = createCsvWriter({
@@ -110,8 +155,17 @@ const createCSV = ({
   const csvData = [];
 
   csvData.push({ stock: "Total Trades", xirr: totalNumberOfTrades });
+  csvData.push({
+    stock: "Total Holdings Trades",
+    xirr: totalNumberOfHoldingsTrades,
+  });
   csvData.push(...stocksXIRR);
   csvData.push({ stock: "Overall XIRR", xirr: overallXIRR });
+
+  csvData.push({ stock: "------------", xirr: "-------------" });
+
+  csvData.push(...soldStocksXIRR);
+  csvData.push({ stock: "Sold XIRR", xirr: overallSoldXIRR });
 
   csvWriter
     .writeRecords(csvData)
