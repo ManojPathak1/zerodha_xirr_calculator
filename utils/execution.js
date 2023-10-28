@@ -40,11 +40,13 @@ const execution = (holdings, trades, reportType) => {
         soldQuantity -= buyQuantity;
       } else {
         buyTrades[index].quantity = net;
+        const trade = { ...buyTrade, quantity: soldQuantity };
+        buySoldTrades.push(trade);
         break;
       }
     }
 
-    const deletedTrades = buyTrades.filter((_, index) => indexToDelete.includes(index))
+    const deletedTrades = buyTrades.filter((_, index) => indexToDelete.includes(index));
     buySoldTrades.push(...deletedTrades);
     buyTrades = buyTrades.filter((_, index) => !indexToDelete.includes(index));
   });
@@ -74,8 +76,6 @@ const execution = (holdings, trades, reportType) => {
     []
   );
 
-  const omitHoldingStocks = [];
-
   const stocksXIRR = lodash.reduce(
     stockToTotalAmountMap,
     (acc, totalAmount, stock) => {
@@ -88,7 +88,6 @@ const execution = (holdings, trades, reportType) => {
           const stockXIRR = (xirr(groupedByStock[stock]) * 100).toFixed(2);
           acc.push({ stock, xirr: stockXIRR });
         } catch (err) {
-          omitHoldingStocks.push(stock);
           console.error(`Holdings Stock - Failed to calculate XIRR for ${stock}`);
         }
       }
@@ -97,8 +96,6 @@ const execution = (holdings, trades, reportType) => {
     []
   );
 
-  const omitSoldStocks = [];
-
   const soldStocksXIRR = lodash.reduce(
     soldStocksGroupByStock,
     (acc, trades, stock) => {
@@ -106,7 +103,6 @@ const execution = (holdings, trades, reportType) => {
         const stockXIRR = (xirr(trades) * 100).toFixed(2);
         acc.push({ stock, xirr: stockXIRR });
       } catch (err) {
-        omitSoldStocks.push(stock);
         console.error(`Sold Stocks - Failed to calculate XIRR for ${stock}`);
       }
       return acc;
@@ -125,6 +121,7 @@ const execution = (holdings, trades, reportType) => {
   createCSV({
     totalNumberOfTrades,
     totalNumberOfHoldingsTrades: xirrData.length,
+    totalNumberOfSoldTrades: soldTrades.length,
     stocksXIRR,
     overallXIRR,
     soldStocksXIRR,
@@ -136,6 +133,7 @@ const execution = (holdings, trades, reportType) => {
 const createCSV = ({
   totalNumberOfTrades,
   totalNumberOfHoldingsTrades,
+  totalNumberOfSoldTrades,
   stocksXIRR,
   overallXIRR,
   soldStocksXIRR,
@@ -160,10 +158,11 @@ const createCSV = ({
     xirr: totalNumberOfHoldingsTrades,
   });
   csvData.push(...stocksXIRR);
-  csvData.push({ stock: "Overall XIRR", xirr: overallXIRR });
+  csvData.push({ stock: "Holdings XIRR", xirr: overallXIRR });
 
   csvData.push({ stock: "------------", xirr: "-------------" });
 
+  csvData.push({ stock: "Total Sold Trades", xirr: totalNumberOfSoldTrades });
   csvData.push(...soldStocksXIRR);
   csvData.push({ stock: "Sold XIRR", xirr: overallSoldXIRR });
 
